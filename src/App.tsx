@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type FormEvent,type MouseEvent } from 'react';
+import { useState, useEffect, useRef, type FormEvent, type MouseEvent } from 'react';
 import { Search, Play, X, Info, ChevronLeft, ChevronRight, Film, Heart, LogOut, History, Plus, Check, Eye, EyeOff, Loader2, CheckSquare } from 'lucide-react';
 
 // --- TİP TANIMLAMALARI (TYPESCRIPT INTERFACES) ---
@@ -51,6 +51,7 @@ const GENRES: Genre[] = [
 export default function App() {
   // --- STATE TANIMLAMALARI ---
   const [query, setQuery] = useState<string>('');
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState<boolean>(false); // YENİ EKLENDİ
   const [movies, setMovies] = useState<Movie[]>([]);
   const [heroMovie, setHeroMovie] = useState<Movie | null>(null);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
@@ -181,7 +182,6 @@ export default function App() {
   };
 
   // --- GELİŞMİŞ ÜYELİK SİSTEMİ ---
-  
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
     setAuthError('');
@@ -257,20 +257,6 @@ export default function App() {
     }, 800);
   };
 
-  const handleGoogleLogin = () => {
-    setAuthLoading(true);
-    setTimeout(() => {
-      const googleUser: User = {
-        name: 'Alperen',
-        surname: '(Google)',
-        email: 'alperen@gmail.com',
-        avatar: 'https://upload.wikimedia.org/wikipedia/commons/0/0b/Netflix-avatar.png'
-      };
-      loginUser(googleUser);
-      setAuthLoading(false);
-    }, 1500);
-  };
-
   const loginUser = (userData: User) => {
     setUser(userData);
     localStorage.setItem('cinealp_current_user', JSON.stringify(userData));
@@ -343,11 +329,11 @@ export default function App() {
     <div className="min-h-screen bg-[#141414] text-white font-sans selection:bg-red-600 selection:text-white pb-10">
       
       {/* --- HEADER --- */}
-      <header className={`fixed top-0 w-full z-[60] transition-all duration-300 flex flex-col ${scrolled ? 'bg-[#141414]/95 backdrop-blur-xl shadow-lg shadow-black/50' : 'bg-gradient-to-b from-black via-black/80 to-transparent'}`}>
+      <header className={`fixed top-0 w-full z-[60] transition-all duration-300 flex flex-col ${scrolled || isMobileSearchOpen ? 'bg-[#141414]/95 backdrop-blur-xl shadow-lg shadow-black/50' : 'bg-gradient-to-b from-black via-black/80 to-transparent'}`}>
         <div className="px-4 md:px-10 h-16 flex items-center justify-between">
           
           {/* LOGO */}
-          <div className="flex flex-col cursor-pointer select-none" onClick={() => {setActiveCategory('trending'); setQuery('');}}>
+          <div className="flex flex-col cursor-pointer select-none" onClick={() => {setActiveCategory('trending'); setQuery(''); setIsMobileSearchOpen(false);}}>
             <div className="text-2xl md:text-3xl font-black text-red-600 tracking-tighter flex items-center gap-1 hover:scale-105 transition">
               CINE<span className="text-white">ALP</span>
             </div>
@@ -355,7 +341,16 @@ export default function App() {
           
           {/* SAĞ TARAF */}
           <div className="flex gap-4 items-center">
-            {/* Arama */}
+            
+            {/* MOBİL ARAMA İKONU (YENİ) */}
+            <button 
+                onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
+                className="md:hidden text-white hover:text-red-500 transition"
+            >
+               {isMobileSearchOpen ? <X size={24} /> : <Search size={24} />}
+            </button>
+
+            {/* MASAÜSTÜ ARAMA (DEĞİŞTİ: hidden md:flex) */}
             <div className={`hidden md:flex items-center bg-black/40 border ${query ? 'border-red-600' : 'border-white/20'} rounded-full px-3 py-1.5 transition-all duration-300 focus-within:border-red-600 w-64 backdrop-blur-sm`}>
               <Search className="text-gray-400 w-4 h-4" />
               <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="İçerik ara..." className="bg-transparent border-none outline-none text-sm text-white placeholder-gray-500 ml-2 w-full" />
@@ -375,8 +370,8 @@ export default function App() {
                         <p className="text-xs text-gray-400">Hoşgeldin,</p>
                         <p className="font-bold truncate">{user.name} {user.surname}</p>
                       </div>
-                      <button onClick={() => {setActiveCategory('mylist'); setShowProfileMenu(false);}} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-2 text-sm"><Heart size={16} /> Listem ({myList.length})</button>
-                      <button onClick={() => {setActiveCategory('history'); setShowProfileMenu(false);}} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-2 text-sm"><History size={16} /> Geçmiş</button>
+                      <button onClick={() => {setActiveCategory('mylist'); setShowProfileMenu(false); setIsMobileSearchOpen(false);}} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-2 text-sm"><Heart size={16} /> Listem ({myList.length})</button>
+                      <button onClick={() => {setActiveCategory('history'); setShowProfileMenu(false); setIsMobileSearchOpen(false);}} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-2 text-sm"><History size={16} /> Geçmiş</button>
                       <div className="border-t border-gray-700 my-1"></div>
                       <button onClick={handleLogout} className="w-full text-left px-4 py-2 hover:bg-red-900/30 text-red-500 flex items-center gap-2 text-sm"><LogOut size={16} /> Çıkış Yap</button>
                    </div>
@@ -387,6 +382,24 @@ export default function App() {
             )}
           </div>
         </div>
+
+        {/* --- MOBİL ARAMA INPUTU (YENİ) --- */}
+        {isMobileSearchOpen && (
+          <div className="md:hidden px-4 pb-4 animate-in slide-in-from-top-2 fade-in duration-200">
+             <div className="flex items-center bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
+                <Search className="text-gray-400 w-5 h-5" />
+                <input 
+                  type="text" 
+                  value={query} 
+                  onChange={(e) => setQuery(e.target.value)} 
+                  placeholder="CineAlp'te ara..." 
+                  className="bg-transparent border-none outline-none text-white placeholder-gray-500 ml-2 w-full"
+                  autoFocus
+                />
+                {query && <button onClick={() => setQuery('')}><X className="text-gray-400 w-5 h-5" /></button>}
+             </div>
+          </div>
+        )}
 
         {/* Kategoriler */}
         {!query && (
@@ -525,22 +538,6 @@ export default function App() {
                   {authMode === 'login' ? 'Oturum Aç' : 'Kayıt Ol'}
                 </button>
 
-                {/* GOOGLE LOGIN
-                <div className="relative my-4">
-                   <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-700"></div></div>
-                   <div className="relative flex justify-center text-xs uppercase"><span className="bg-black px-2 text-gray-500">veya</span></div>
-                </div>
-
-                <button 
-                  type="button" 
-                  onClick={handleGoogleLogin} 
-                  disabled={authLoading}
-                  className="w-full bg-white text-black hover:bg-gray-200 font-bold py-3 rounded transition flex items-center justify-center gap-3"
-                >
-                  {/* Google Logo SVG */}
-                  {/* <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-                  Google ile devam et
-                </button> */} */}
               </form>
 
               <div className="mt-6 text-gray-400 text-sm text-center">
