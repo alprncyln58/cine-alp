@@ -1,5 +1,5 @@
-import type { useState, useEffect, useRef, FormEvent, MouseEvent } from 'react';
-import type { Search, Play, X, Info, ChevronLeft, ChevronRight, Film, Heart, LogOut, History, Plus, Check, Eye, EyeOff, Loader2, CheckSquare } from 'lucide-react';
+import { useState, useEffect, useRef, type FormEvent,type MouseEvent } from 'react';
+import { Search, Play, X, Info, ChevronLeft, ChevronRight, Film, Heart, LogOut, History, Plus, Check, Eye, EyeOff, Loader2, CheckSquare } from 'lucide-react';
 
 // --- TİP TANIMLAMALARI (TYPESCRIPT INTERFACES) ---
 interface Movie {
