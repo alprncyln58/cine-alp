@@ -86,9 +86,9 @@ export default function App() {
 
   // --- LOCAL STORAGE YÖNETİMİ ---
   useEffect(() => {
-    const storedUser = localStorage.getItem('alperflix_current_user');
-    const storedList = localStorage.getItem('alperflix_mylist');
-    const storedHistory = localStorage.getItem('alperflix_history');
+    const storedUser = localStorage.getItem('cinealp_current_user');
+    const storedList = localStorage.getItem('cinealp_mylist');
+    const storedHistory = localStorage.getItem('cinealp_history');
 
     if (storedUser) setUser(JSON.parse(storedUser));
     if (storedList) setMyList(JSON.parse(storedList));
@@ -100,11 +100,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('alperflix_mylist', JSON.stringify(myList));
+    localStorage.setItem('cinealp_mylist', JSON.stringify(myList));
   }, [myList]);
 
   useEffect(() => {
-    localStorage.setItem('alperflix_history', JSON.stringify(watchHistory));
+    localStorage.setItem('cinealp_history', JSON.stringify(watchHistory));
   }, [watchHistory]);
 
   // --- API İŞLEMLERİ ---
@@ -187,11 +187,11 @@ export default function App() {
     setAuthError('');
   };
 
-  const getUsers = (): User[] => JSON.parse(localStorage.getItem('alperflix_users') || '[]');
+  const getUsers = (): User[] => JSON.parse(localStorage.getItem('cinealp_users') || '[]');
   const saveUserToDB = (newUser: User) => {
     const users = getUsers();
     users.push(newUser);
-    localStorage.setItem('alperflix_users', JSON.stringify(users));
+    localStorage.setItem('cinealp_users', JSON.stringify(users));
   };
 
   // KAYIT OL
@@ -273,7 +273,7 @@ export default function App() {
 
   const loginUser = (userData: User) => {
     setUser(userData);
-    localStorage.setItem('alperflix_current_user', JSON.stringify(userData));
+    localStorage.setItem('cinealp_current_user', JSON.stringify(userData));
     setShowAuthModal(false);
     setFormData({ name: '', surname: '', email: '', password: '', confirmPassword: '' });
     setCaptchaVerified(false);
@@ -282,7 +282,7 @@ export default function App() {
 
   const handleLogout = () => {
     setUser(null);
-    localStorage.removeItem('alperflix_current_user');
+    localStorage.removeItem('cinealp_current_user');
     setShowProfileMenu(false);
     setActiveCategory('trending');
   };
@@ -349,7 +349,7 @@ export default function App() {
           {/* LOGO */}
           <div className="flex flex-col cursor-pointer select-none" onClick={() => {setActiveCategory('trending'); setQuery('');}}>
             <div className="text-2xl md:text-3xl font-black text-red-600 tracking-tighter flex items-center gap-1 hover:scale-105 transition">
-              ALPER<span className="text-white">FLIX</span>
+              CINE<span className="text-white">ALP</span>
             </div>
           </div>
           
@@ -545,7 +545,7 @@ export default function App() {
 
               <div className="mt-6 text-gray-400 text-sm text-center">
                 {authMode === 'login' ? (
-                  <>Alperflix'e yeni misiniz? <button onClick={() => {setAuthMode('register'); setAuthError('');}} className="text-white hover:underline ml-1 font-medium">Şimdi kaydolun.</button></>
+                  <>cinealp'e yeni misiniz? <button onClick={() => {setAuthMode('register'); setAuthError('');}} className="text-white hover:underline ml-1 font-medium">Şimdi kaydolun.</button></>
                 ) : (
                   <>Zaten üye misiniz? <button onClick={() => {setAuthMode('login'); setAuthError('');}} className="text-white hover:underline ml-1 font-medium">Oturum açın.</button></>
                 )}
@@ -683,8 +683,8 @@ export default function App() {
 
       {/* --- FOOTER --- */}
       <footer className="py-8 text-center text-gray-500 text-xs mt-12 border-t border-gray-800 bg-[#141414]">
-        <p>&copy; 2025 <span className="text-red-600 font-bold">ALPERFLIX</span>. Tüm hakları saklıdır.</p>
-        <p className="mt-2 flex items-center justify-center gap-2">Geliştirici: <span className="text-white font-medium border border-gray-700 px-2 py-0.5 rounded bg-gray-800">Alperen</span></p>
+        <p>&copy; 2025 <span className="text-red-600 font-bold">cinealp</span>. Tüm hakları saklıdır.</p>
+        <p className="mt-2 flex items-center justify-center gap-2">Geliştirici: <span className="text-white font-medium border border-gray-700 px-2 py-0.5 rounded bg-gray-800">Alperen Ceylan</span></p>
       </footer>
     </div>
   );
