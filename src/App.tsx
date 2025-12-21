@@ -1,7 +1,44 @@
 import { useState, useEffect, useRef, type FormEvent, type MouseEvent } from 'react';
 import { Search, Play, X, Info, ChevronLeft, ChevronRight, Film, Heart, LogOut, History, Plus, Check, Eye, EyeOff, Loader2, CheckSquare } from 'lucide-react';
 
-// --- TİP TANIMLAMALARI (TYPESCRIPT INTERFACES) ---
+// --- FIREBASE İMPORTLARI ---
+import { initializeApp } from "firebase/app";
+import { 
+  getAuth, 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged, 
+  updateProfile,
+  type User as FirebaseUser 
+} from "firebase/auth";
+import { 
+  getFirestore, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  updateDoc, 
+  arrayUnion, 
+  arrayRemove 
+} from "firebase/firestore";
+
+// --- FIREBASE AYARLARI ---
+const firebaseConfig = {
+  apiKey: "AIzaSyCVeQ-Rj8Kx-YAJtEZs7bqzLkr2hwQrNlo",
+  authDomain: "gen-lang-client-0259328350.firebaseapp.com",
+  projectId: "gen-lang-client-0259328350",
+  storageBucket: "gen-lang-client-0259328350.firebasestorage.app",
+  messagingSenderId: "632827008516",
+  appId: "1:632827008516:web:a612a17fe4d257df458751",
+  measurementId: "G-ZDYLM2DQCV"
+};
+
+// Firebase Başlatma
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+// --- TİP TANIMLAMALARI ---
 interface Movie {
   id: number;
   title?: string;
@@ -16,11 +53,11 @@ interface Movie {
   original_language?: string;
 }
 
-interface User {
+interface UserProfile {
+  uid: string;
   name: string;
   surname: string;
   email: string;
-  password?: string;
   avatar: string;
 }
 
@@ -54,18 +91,19 @@ export default function App() {
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState<boolean>(false);
   
   const [movies, setMovies] = useState<Movie[]>([]);
-  const [page, setPage] = useState<number>(1); // SAYFA TAKİBİ İÇİN YENİ STATE
+  const [page, setPage] = useState<number>(1);
   
   const [heroMovie, setHeroMovie] = useState<Movie | null>(null);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [activeCategory, setActiveCategory] = useState<string | number>('trending');
   const [loading, setLoading] = useState<boolean>(false);
-  const [loadingMore, setLoadingMore] = useState<boolean>(false); // DAHA FAZLA YÜKLENİYOR MU?
+  const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [scrolled, setScrolled] = useState<boolean>(false);
   
-  // Üyelik Sistemi State'leri
-  const [user, setUser] = useState<User | null>(null); 
+  // Üyelik Sistemi State'leri (Firebase)
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
@@ -89,32 +127,43 @@ export default function App() {
 
   const categoryScrollRef = useRef<HTMLDivElement>(null);
 
-  // --- LOCAL STORAGE YÖNETİMİ ---
+  // --- BAŞLANGIÇ AYARLARI ---
   useEffect(() => {
-    const storedUser = localStorage.getItem('cinealp_current_user');
-    const storedList = localStorage.getItem('cinealp_mylist');
-    const storedHistory = localStorage.getItem('cinealp_history');
-
-    if (storedUser) setUser(JSON.parse(storedUser));
-    if (storedList) setMyList(JSON.parse(storedList));
-    if (storedHistory) setWatchHistory(JSON.parse(storedHistory));
-
+    // Scroll dinleyicisi
     const handleScroll = () => setScrolled(window.scrollY > 10);
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+
+    // Firebase Auth Dinleyicisi (Kullanıcı giriş çıkışını takip eder)
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        // Kullanıcı giriş yaptıysa Firestore'dan profilini ve listelerini çek
+        const userDocRef = doc(db, "users", currentUser.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        
+        if (userDocSnap.exists()) {
+          const data = userDocSnap.data();
+          setUserProfile(data.profile as UserProfile);
+          setMyList(data.myList || []);
+          setWatchHistory(data.watchHistory || []);
+        }
+      } else {
+        // Çıkış yapıldıysa temizle
+        setUserProfile(null);
+        setMyList([]);
+        setWatchHistory([]);
+      }
+    });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      unsubscribe();
+    };
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem('cinealp_mylist', JSON.stringify(myList));
-  }, [myList]);
-
-  useEffect(() => {
-    localStorage.setItem('cinealp_history', JSON.stringify(watchHistory));
-  }, [watchHistory]);
 
   // --- API İŞLEMLERİ ---
   
-  // Kategori veya Arama değiştiğinde Sayfayı 1'e çek ve yükle
+  // Kategori veya Arama değiştiğinde
   useEffect(() => {
     if (activeCategory === 'mylist') {
       setMovies(myList);
@@ -125,15 +174,15 @@ export default function App() {
       return;
     }
 
-    setPage(1); // Sayfayı sıfırla
+    setPage(1); 
     
     if (query.trim().length > 0) {
-        // Arama yapılıyor (Debounce useEffect'i tetikleyecek)
+        // Arama yapılıyor
     } else {
-        fetchContent(1); // İlk sayfayı çek
+        fetchContent(1); 
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCategory, myList, watchHistory]); // query'i buraya koymuyoruz, onun kendi useEffect'i var
+  }, [activeCategory, myList, watchHistory]); 
 
   // Arama Debounce
   useEffect(() => {
@@ -142,7 +191,6 @@ export default function App() {
         setPage(1);
         searchMovies(1);
       } else if (query.trim().length === 0 && movies.length === 0) {
-         // Arama silindiyse normal içeriğe dön
          fetchContent(1);
       }
     }, 500);
@@ -159,7 +207,6 @@ export default function App() {
       if (!category) return;
 
       let url = '';
-      // Page parametresi eklendi
       if (category.url) {
         url = `https://api.themoviedb.org/3${category.url}?api_key=${DIRECT_API_KEY}&language=tr-TR&page=${pageNum}`;
       } else {
@@ -172,7 +219,6 @@ export default function App() {
       
       if (pageNum === 1) {
         setMovies(results);
-        // Hero movie sadece ilk yüklemede değişsin
         if (activeCategory === 'trending' || !heroMovie) {
             const validBackdrops = results.filter(m => m.backdrop_path);
             if (validBackdrops.length > 0) {
@@ -180,7 +226,6 @@ export default function App() {
             }
         }
       } else {
-        // Eski filmlerin üzerine yenilerini ekle
         setMovies(prev => [...prev, ...results]);
       }
       
@@ -215,7 +260,6 @@ export default function App() {
     }
   };
 
-  // DAHA FAZLA GÖSTER BUTONU İŞLEVİ
   const handleLoadMore = () => {
     const nextPage = page + 1;
     setPage(nextPage);
@@ -227,119 +271,172 @@ export default function App() {
     }
   };
 
-  // --- GELİŞMİŞ ÜYELİK SİSTEMİ ---
+  // --- FIREBASE AUTHENTICATION (KAYIT & GİRİŞ) ---
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
     setAuthError('');
   };
 
-  const getUsers = (): User[] => JSON.parse(localStorage.getItem('cinealp_users') || '[]');
-  const saveUserToDB = (newUser: User) => {
-    const users = getUsers();
-    users.push(newUser);
-    localStorage.setItem('cinealp_users', JSON.stringify(users));
-  };
-
   // KAYIT OL
-  const handleRegister = (e: FormEvent) => {
+  const handleRegister = async (e: FormEvent) => {
     e.preventDefault();
     setAuthLoading(true);
+    setAuthError('');
 
-    setTimeout(() => {
-      if (formData.password !== formData.confirmPassword) {
-        setAuthError('Şifreler eşleşmiyor.');
-        setAuthLoading(false);
-        return;
-      }
-      if (formData.password.length < 6) {
-        setAuthError('Şifre en az 6 karakter olmalıdır.');
-        setAuthLoading(false);
-        return;
-      }
-      if (!captchaVerified) {
-        setAuthError('Lütfen robot olmadığınızı doğrulayın.');
-        setAuthLoading(false);
-        return;
-      }
+    if (formData.password !== formData.confirmPassword) {
+      setAuthError('Şifreler eşleşmiyor.');
+      setAuthLoading(false);
+      return;
+    }
+    if (formData.password.length < 6) {
+      setAuthError('Şifre en az 6 karakter olmalıdır.');
+      setAuthLoading(false);
+      return;
+    }
+    if (!captchaVerified) {
+      setAuthError('Lütfen robot olmadığınızı doğrulayın.');
+      setAuthLoading(false);
+      return;
+    }
 
-      const users = getUsers();
-      const userExists = users.find(u => u.email === formData.email);
-      
-      if (userExists) {
-        setAuthError('Bu e-posta adresi zaten kullanımda.');
-        setAuthLoading(false);
-        return;
-      }
+    try {
+      // 1. Firebase Auth ile kullanıcı oluştur
+      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+      const user = userCredential.user;
 
-      const newUser: User = {
+      // 2. Profil ismini güncelle
+      await updateProfile(user, {
+        displayName: `${formData.name} ${formData.surname}`
+      });
+
+      // 3. Firestore Veritabanına kullanıcı verilerini kaydet
+      const avatarUrl = `https://ui-avatars.com/api/?name=${formData.name}+${formData.surname}&background=db0000&color=fff`;
+      const newProfile: UserProfile = {
+        uid: user.uid,
         name: formData.name,
         surname: formData.surname,
         email: formData.email,
-        password: formData.password,
-        avatar: `https://ui-avatars.com/api/?name=${formData.name}+${formData.surname}&background=db0000&color=fff`
+        avatar: avatarUrl
       };
 
-      saveUserToDB(newUser);
-      loginUser(newUser);
+      await setDoc(doc(db, "users", user.uid), {
+        profile: newProfile,
+        myList: [],
+        watchHistory: []
+      });
+
+      setUserProfile(newProfile);
+      setShowAuthModal(false);
+      resetForm();
+
+    } catch (error: any) {
+      console.error(error);
+      if (error.code === 'auth/email-already-in-use') {
+        setAuthError('Bu e-posta adresi zaten kullanımda.');
+      } else {
+        setAuthError('Kayıt olurken bir hata oluştu: ' + error.message);
+      }
+    } finally {
       setAuthLoading(false);
-    }, 1000);
+    }
   };
 
   // GİRİŞ YAP
-  const handleLogin = (e: FormEvent) => {
+  const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setAuthLoading(true);
+    setAuthError('');
 
-    setTimeout(() => {
-      const users = getUsers();
-      const foundUser = users.find(u => u.email === formData.email && u.password === formData.password);
-
-      if (foundUser) {
-        loginUser(foundUser);
-      } else {
+    try {
+      await signInWithEmailAndPassword(auth, formData.email, formData.password);
+      setShowAuthModal(false);
+      resetForm();
+    } catch (error: any) {
+      console.error(error);
+      if (error.code === 'auth/invalid-credential') {
         setAuthError('E-posta veya şifre hatalı.');
+      } else {
+        setAuthError('Giriş başarısız: ' + error.message);
       }
+    } finally {
       setAuthLoading(false);
-    }, 800);
+    }
   };
 
-  const loginUser = (userData: User) => {
-    setUser(userData);
-    localStorage.setItem('cinealp_current_user', JSON.stringify(userData));
-    setShowAuthModal(false);
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setShowProfileMenu(false);
+      setActiveCategory('trending');
+    } catch (error) {
+      console.error("Çıkış hatası:", error);
+    }
+  };
+
+  const resetForm = () => {
     setFormData({ name: '', surname: '', email: '', password: '', confirmPassword: '' });
     setCaptchaVerified(false);
-    setAuthError('');
   };
 
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('cinealp_current_user');
-    setShowProfileMenu(false);
-    setActiveCategory('trending');
-  };
-
-  // --- UI YARDIMCILARI ---
-  const toggleMyList = (movie: Movie, e?: MouseEvent) => {
+  // --- LİSTE YÖNETİMİ (FIREBASE) ---
+  const toggleMyList = async (movie: Movie, e?: MouseEvent) => {
     e?.stopPropagation();
     if (!user) {
       setShowAuthModal(true);
       return;
     }
-    const exists = myList.find(m => m.id === movie.id);
+
+    const exists = myList.some(m => m.id === movie.id);
+    let newList = [];
+
+    // Önce UI'ı güncelle (Hızlı tepki için)
     if (exists) {
-      setMyList(myList.filter(m => m.id !== movie.id));
+      newList = myList.filter(m => m.id !== movie.id);
     } else {
-      setMyList([movie, ...myList]);
+      newList = [movie, ...myList];
+    }
+    setMyList(newList);
+
+    // Sonra Veritabanını Güncelle
+    const userDocRef = doc(db, "users", user.uid);
+    try {
+      if (exists) {
+        await updateDoc(userDocRef, {
+          myList: arrayRemove(movie) // Tam eşleşme gerekir, bazen obje referansı sorunu olabilir. 
+          // Not: Basit arrayRemove obje için bazen çalışmayabilir, en garantisi tüm listeyi set etmektir ama trafik yer.
+          // Burada daha sağlam olması için tüm listeyi güncelliyoruz:
+        });
+        // arrayRemove objelerde sorun çıkarabildiği için garanti yöntem:
+        await setDoc(userDocRef, { myList: newList }, { merge: true }); 
+      } else {
+        await updateDoc(userDocRef, {
+          myList: arrayUnion(movie)
+        });
+      }
+    } catch (err) {
+      console.error("Liste güncellenemedi:", err);
     }
   };
 
-  const addToHistory = (movie: Movie) => {
+  const addToHistory = async (movie: Movie) => {
     if (!user) return;
+    
+    // UI Güncelle
     const filtered = watchHistory.filter(m => m.id !== movie.id);
-    setWatchHistory([movie, ...filtered]);
+    const newHistory = [movie, ...filtered];
+    setWatchHistory(newHistory);
+
+    // DB Güncelle
+    const userDocRef = doc(db, "users", user.uid);
+    try {
+      // Geçmiş sürekli değiştiği için tüm array'i güncellemek daha sağlıklıdır
+      await setDoc(userDocRef, { watchHistory: newHistory }, { merge: true });
+    } catch (err) {
+      console.error("Geçmiş kaydedilemedi:", err);
+    }
   };
 
+  // --- UI YARDIMCILARI ---
   const handleMovieClick = (movie: Movie) => {
     setSelectedMovie(movie);
     setIsPlaying(false);
@@ -408,17 +505,17 @@ export default function App() {
             </div>
 
             {/* Profil */}
-            {user ? (
+            {user && userProfile ? (
               <div className="relative">
                 <div onClick={() => setShowProfileMenu(!showProfileMenu)} className="flex items-center gap-2 cursor-pointer hover:bg-white/10 p-1.5 rounded-full transition">
-                  <img src={user.avatar} alt="Profile" className="w-8 h-8 rounded" />
-                  <span className="text-sm font-medium hidden md:block">{user.name}</span>
+                  <img src={userProfile.avatar} alt="Profile" className="w-8 h-8 rounded" />
+                  <span className="text-sm font-medium hidden md:block">{userProfile.name}</span>
                 </div>
                 {showProfileMenu && (
                    <div className="absolute right-0 top-12 w-48 bg-[#181818] border border-gray-700 rounded-lg shadow-xl py-2 animate-in fade-in zoom-in-95 duration-200">
                       <div className="px-4 py-2 border-b border-gray-700 mb-2">
                         <p className="text-xs text-gray-400">Hoşgeldin,</p>
-                        <p className="font-bold truncate">{user.name} {user.surname}</p>
+                        <p className="font-bold truncate">{userProfile.name} {userProfile.surname}</p>
                       </div>
                       <button onClick={() => {setActiveCategory('mylist'); setShowProfileMenu(false); setIsMobileSearchOpen(false);}} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-2 text-sm"><Heart size={16} /> Listem ({myList.length})</button>
                       <button onClick={() => {setActiveCategory('history'); setShowProfileMenu(false); setIsMobileSearchOpen(false);}} className="w-full text-left px-4 py-2 hover:bg-gray-700 flex items-center gap-2 text-sm"><History size={16} /> Geçmiş</button>
@@ -538,9 +635,6 @@ export default function App() {
                   <>Zaten üye misiniz? <button onClick={() => {setAuthMode('login'); setAuthError('');}} className="text-white hover:underline ml-1 font-medium">Oturum açın.</button></>
                 )}
               </div>
-              <div className="mt-4 text-[10px] text-gray-500 text-center leading-tight">
-                 Bu sayfa robot olmadığınızı kanıtlamak için Google reCAPTCHA tarafından korunuyor olabilir.
-              </div>
             </div>
           </div>
         </div>
@@ -598,7 +692,7 @@ export default function App() {
                       <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-gray-800 transition-all duration-300 group-hover:scale-105 group-hover:shadow-2xl group-hover:z-30">
                         <img src={movie.poster_path ? getImage(movie.poster_path, 'w500') || '' : "https://via.placeholder.com/500x750?text=No+Poster"} alt={movie.title} className="w-full h-full object-cover" loading="lazy" />
                         
-                        {/* YENİ: Yıl Etiketi (Sol Üst) */}
+                        {/* Yıl Etiketi */}
                         {getYear(movie) && (
                             <div className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg z-20">
                                 {getYear(movie)}
@@ -628,7 +722,7 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* YENİ: DAHA FAZLA GÖSTER BUTONU */}
+                {/* DAHA FAZLA GÖSTER BUTONU */}
                 {activeCategory !== 'mylist' && activeCategory !== 'history' && (
                     <div className="w-full flex justify-center py-10">
                         <button 
