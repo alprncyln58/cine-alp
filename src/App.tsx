@@ -51,13 +51,17 @@ const GENRES: Genre[] = [
 export default function App() {
   // --- STATE TANIMLAMALARI ---
   const [query, setQuery] = useState<string>('');
-  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState<boolean>(false); // YENİ EKLENDİ
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState<boolean>(false);
+  
   const [movies, setMovies] = useState<Movie[]>([]);
+  const [page, setPage] = useState<number>(1); // SAYFA TAKİBİ İÇİN YENİ STATE
+  
   const [heroMovie, setHeroMovie] = useState<Movie | null>(null);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [activeCategory, setActiveCategory] = useState<string | number>('trending');
   const [loading, setLoading] = useState<boolean>(false);
+  const [loadingMore, setLoadingMore] = useState<boolean>(false); // DAHA FAZLA YÜKLENİYOR MU?
   const [scrolled, setScrolled] = useState<boolean>(false);
   
   // Üyelik Sistemi State'leri
@@ -109,8 +113,9 @@ export default function App() {
   }, [watchHistory]);
 
   // --- API İŞLEMLERİ ---
+  
+  // Kategori veya Arama değiştiğinde Sayfayı 1'e çek ve yükle
   useEffect(() => {
-    if (query.trim().length > 0) return;
     if (activeCategory === 'mylist') {
       setMovies(myList);
       return;
@@ -119,65 +124,106 @@ export default function App() {
       setMovies(watchHistory);
       return;
     }
-    fetchContent();
+
+    setPage(1); // Sayfayı sıfırla
+    
+    if (query.trim().length > 0) {
+        // Arama yapılıyor (Debounce useEffect'i tetikleyecek)
+    } else {
+        fetchContent(1); // İlk sayfayı çek
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCategory, query, myList, watchHistory]);
+  }, [activeCategory, myList, watchHistory]); // query'i buraya koymuyoruz, onun kendi useEffect'i var
 
   // Arama Debounce
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (query.trim().length > 0) {
-        searchMovies();
+        setPage(1);
+        searchMovies(1);
+      } else if (query.trim().length === 0 && movies.length === 0) {
+         // Arama silindiyse normal içeriğe dön
+         fetchContent(1);
       }
     }, 500);
     return () => clearTimeout(delayDebounceFn);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
-  const fetchContent = async () => {
-    setLoading(true);
+  const fetchContent = async (pageNum: number) => {
+    if (pageNum === 1) setLoading(true);
+    else setLoadingMore(true);
+
     try {
       const category = GENRES.find(c => c.id === activeCategory);
       if (!category) return;
 
       let url = '';
+      // Page parametresi eklendi
       if (category.url) {
-        url = `https://api.themoviedb.org/3${category.url}?api_key=${DIRECT_API_KEY}&language=tr-TR`;
+        url = `https://api.themoviedb.org/3${category.url}?api_key=${DIRECT_API_KEY}&language=tr-TR&page=${pageNum}`;
       } else {
-        url = `https://api.themoviedb.org/3/discover/movie?api_key=${DIRECT_API_KEY}&with_genres=${activeCategory}&language=tr-TR&sort_by=popularity.desc`;
+        url = `https://api.themoviedb.org/3/discover/movie?api_key=${DIRECT_API_KEY}&with_genres=${activeCategory}&language=tr-TR&sort_by=popularity.desc&page=${pageNum}`;
       }
 
       const res = await fetch(url);
       const data = await res.json();
       const results: Movie[] = data.results || [];
       
-      setMovies(results);
-      
-      if (activeCategory === 'trending' || !heroMovie) {
-        const validBackdrops = results.filter(m => m.backdrop_path);
-        if (validBackdrops.length > 0) {
-          setHeroMovie(validBackdrops[Math.floor(Math.random() * Math.min(5, validBackdrops.length))]);
+      if (pageNum === 1) {
+        setMovies(results);
+        // Hero movie sadece ilk yüklemede değişsin
+        if (activeCategory === 'trending' || !heroMovie) {
+            const validBackdrops = results.filter(m => m.backdrop_path);
+            if (validBackdrops.length > 0) {
+              setHeroMovie(validBackdrops[Math.floor(Math.random() * Math.min(5, validBackdrops.length))]);
+            }
         }
+      } else {
+        // Eski filmlerin üzerine yenilerini ekle
+        setMovies(prev => [...prev, ...results]);
       }
+      
     } catch (error) {
       console.error("API Hatası:", error);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
-  const searchMovies = async () => {
-    setLoading(true);
+  const searchMovies = async (pageNum: number) => {
+    if (pageNum === 1) setLoading(true);
+    else setLoadingMore(true);
+
     try {
-      const res = await fetch(`https://api.themoviedb.org/3/search/multi?api_key=${DIRECT_API_KEY}&language=tr-TR&query=${query}`);
+      const res = await fetch(`https://api.themoviedb.org/3/search/multi?api_key=${DIRECT_API_KEY}&language=tr-TR&query=${query}&page=${pageNum}`);
       const data = await res.json();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const results = data.results.filter((i: any) => i.media_type === 'movie' || i.media_type === 'tv');
-      setMovies(results);
+      
+      if (pageNum === 1) {
+        setMovies(results);
+      } else {
+        setMovies(prev => [...prev, ...results]);
+      }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
+    }
+  };
+
+  // DAHA FAZLA GÖSTER BUTONU İŞLEVİ
+  const handleLoadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    
+    if (query.trim().length > 0) {
+        searchMovies(nextPage);
+    } else {
+        fetchContent(nextPage);
     }
   };
 
@@ -315,6 +361,10 @@ export default function App() {
 
   const getImage = (path?: string, size = 'original') => path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
 
+  const getYear = (movie: Movie) => {
+     return movie.release_date?.split('-')[0] || movie.first_air_date?.split('-')[0] || '';
+  };
+
   const scrollCategories = (direction: 'left' | 'right') => {
     if (categoryScrollRef.current) {
       const { current } = categoryScrollRef;
@@ -342,7 +392,7 @@ export default function App() {
           {/* SAĞ TARAF */}
           <div className="flex gap-4 items-center">
             
-            {/* MOBİL ARAMA İKONU (YENİ) */}
+            {/* MOBİL ARAMA İKONU */}
             <button 
                 onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
                 className="md:hidden text-white hover:text-red-500 transition"
@@ -350,7 +400,7 @@ export default function App() {
                {isMobileSearchOpen ? <X size={24} /> : <Search size={24} />}
             </button>
 
-            {/* MASAÜSTÜ ARAMA (DEĞİŞTİ: hidden md:flex) */}
+            {/* MASAÜSTÜ ARAMA */}
             <div className={`hidden md:flex items-center bg-black/40 border ${query ? 'border-red-600' : 'border-white/20'} rounded-full px-3 py-1.5 transition-all duration-300 focus-within:border-red-600 w-64 backdrop-blur-sm`}>
               <Search className="text-gray-400 w-4 h-4" />
               <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="İçerik ara..." className="bg-transparent border-none outline-none text-sm text-white placeholder-gray-500 ml-2 w-full" />
@@ -383,7 +433,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* --- MOBİL ARAMA INPUTU (YENİ) --- */}
+        {/* --- MOBİL ARAMA INPUTU --- */}
         {isMobileSearchOpen && (
           <div className="md:hidden px-4 pb-4 animate-in slide-in-from-top-2 fade-in duration-200">
              <div className="flex items-center bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
@@ -423,12 +473,10 @@ export default function App() {
         )}
       </header>
 
-      {/* --- AUTH MODAL (Gelişmiş) --- */}
+      {/* --- AUTH MODAL --- */}
       {showAuthModal && (
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-black border border-white/10 rounded-lg w-full max-w-md relative shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            
-            {/* Modal Header */}
             <div className="p-6 pb-2">
                <button onClick={() => setShowAuthModal(false)} className="absolute top-4 right-4 text-gray-400 hover:text-white transition"><X /></button>
                <h2 className="text-3xl font-bold mb-1">{authMode === 'login' ? 'Oturum Aç' : 'Kayıt Ol'}</h2>
@@ -439,88 +487,34 @@ export default function App() {
                )}
             </div>
             
-            {/* Modal Body (Scrollable) */}
             <div className="p-6 pt-2 overflow-y-auto custom-scrollbar">
               <form onSubmit={authMode === 'login' ? handleLogin : handleRegister} className="space-y-4">
-                
-                {/* KAYIT OL - EK ALANLAR */}
                 {authMode === 'register' && (
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <input 
-                        type="text" 
-                        name="name"
-                        required
-                        placeholder="Adınız" 
-                        value={formData.name}
-                        onChange={handleInputChange}
-                        className="w-full bg-[#333] rounded px-4 py-3 text-white placeholder-gray-400 focus:bg-[#444] outline-none border border-transparent focus:border-white/20 transition text-sm"
-                      />
+                      <input type="text" name="name" required placeholder="Adınız" value={formData.name} onChange={handleInputChange} className="w-full bg-[#333] rounded px-4 py-3 text-white placeholder-gray-400 focus:bg-[#444] outline-none border border-transparent focus:border-white/20 transition text-sm" />
                     </div>
                     <div>
-                      <input 
-                        type="text" 
-                        name="surname"
-                        required
-                        placeholder="Soyadınız" 
-                        value={formData.surname}
-                        onChange={handleInputChange}
-                        className="w-full bg-[#333] rounded px-4 py-3 text-white placeholder-gray-400 focus:bg-[#444] outline-none border border-transparent focus:border-white/20 transition text-sm"
-                      />
+                      <input type="text" name="surname" required placeholder="Soyadınız" value={formData.surname} onChange={handleInputChange} className="w-full bg-[#333] rounded px-4 py-3 text-white placeholder-gray-400 focus:bg-[#444] outline-none border border-transparent focus:border-white/20 transition text-sm" />
                     </div>
                   </div>
                 )}
-
-                {/* EMAIL */}
                 <div>
-                  <input 
-                    type="email" 
-                    name="email"
-                    required
-                    placeholder="E-posta adresi" 
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    className="w-full bg-[#333] rounded px-4 py-3 text-white placeholder-gray-400 focus:bg-[#444] outline-none border border-transparent focus:border-white/20 transition text-sm"
-                  />
+                  <input type="email" name="email" required placeholder="E-posta adresi" value={formData.email} onChange={handleInputChange} className="w-full bg-[#333] rounded px-4 py-3 text-white placeholder-gray-400 focus:bg-[#444] outline-none border border-transparent focus:border-white/20 transition text-sm" />
                 </div>
-
-                {/* ŞİFRE */}
                 <div className="relative">
-                  <input 
-                    type={showPassword ? "text" : "password"} 
-                    name="password"
-                    required
-                    placeholder="Parola" 
-                    value={formData.password}
-                    onChange={handleInputChange}
-                    className="w-full bg-[#333] rounded px-4 py-3 text-white placeholder-gray-400 focus:bg-[#444] outline-none border border-transparent focus:border-white/20 transition text-sm pr-10"
-                  />
+                  <input type={showPassword ? "text" : "password"} name="password" required placeholder="Parola" value={formData.password} onChange={handleInputChange} className="w-full bg-[#333] rounded px-4 py-3 text-white placeholder-gray-400 focus:bg-[#444] outline-none border border-transparent focus:border-white/20 transition text-sm pr-10" />
                   <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-3 text-gray-400 hover:text-white">
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
-
-                {/* KAYIT OL - ŞİFRE TEKRAR */}
                 {authMode === 'register' && (
                   <div className="relative">
-                    <input 
-                      type={showPassword ? "text" : "password"} 
-                      name="confirmPassword"
-                      required
-                      placeholder="Parolayı Doğrula" 
-                      value={formData.confirmPassword}
-                      onChange={handleInputChange}
-                      className={`w-full bg-[#333] rounded px-4 py-3 text-white placeholder-gray-400 focus:bg-[#444] outline-none border transition text-sm ${formData.confirmPassword && formData.password !== formData.confirmPassword ? 'border-red-500' : 'border-transparent focus:border-white/20'}`}
-                    />
+                    <input type={showPassword ? "text" : "password"} name="confirmPassword" required placeholder="Parolayı Doğrula" value={formData.confirmPassword} onChange={handleInputChange} className={`w-full bg-[#333] rounded px-4 py-3 text-white placeholder-gray-400 focus:bg-[#444] outline-none border transition text-sm ${formData.confirmPassword && formData.password !== formData.confirmPassword ? 'border-red-500' : 'border-transparent focus:border-white/20'}`} />
                   </div>
                 )}
-
-                {/* reCAPTCHA SİMÜLASYONU */}
                 {authMode === 'register' && (
-                   <div 
-                     onClick={() => setCaptchaVerified(!captchaVerified)}
-                     className="bg-[#f9f9f9] border border-[#d3d3d3] rounded p-2 flex items-center gap-3 cursor-pointer w-fit pr-8 select-none"
-                   >
+                   <div onClick={() => setCaptchaVerified(!captchaVerified)} className="bg-[#f9f9f9] border border-[#d3d3d3] rounded p-2 flex items-center gap-3 cursor-pointer w-fit pr-8 select-none">
                       <div className={`w-6 h-6 border-2 rounded-sm flex items-center justify-center transition ${captchaVerified ? 'border-transparent' : 'border-[#c1c1c1] bg-white'}`}>
                          {captchaVerified && <CheckSquare className="text-green-600 w-7 h-7" />}
                       </div>
@@ -531,13 +525,10 @@ export default function App() {
                       </div>
                    </div>
                 )}
-
-                {/* SUBMIT BUTTON */}
                 <button type="submit" disabled={authLoading} className="w-full bg-red-600 hover:bg-red-700 disabled:bg-red-900 disabled:cursor-not-allowed text-white font-bold py-3 rounded mt-2 transition flex justify-center items-center gap-2">
                   {authLoading && <Loader2 className="animate-spin" size={20} />}
                   {authMode === 'login' ? 'Oturum Aç' : 'Kayıt Ol'}
                 </button>
-
               </form>
 
               <div className="mt-6 text-gray-400 text-sm text-center">
@@ -600,33 +591,57 @@ export default function App() {
                  {activeCategory === 'mylist' && <p className="text-sm">Filmleri beğenerek listenize ekleyebilirsiniz.</p>}
                </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-10">
-                {movies.map((movie) => (
-                  <div key={movie.id} onClick={() => handleMovieClick(movie)} className="group cursor-pointer flex flex-col gap-2 relative">
-                    <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-gray-800 transition-all duration-300 group-hover:scale-105 group-hover:shadow-2xl group-hover:z-30">
-                      <img src={movie.poster_path ? getImage(movie.poster_path, 'w500') || '' : "https://via.placeholder.com/500x750?text=No+Poster"} alt={movie.title} className="w-full h-full object-cover" loading="lazy" />
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3 backdrop-blur-[2px]">
-                         <div className="bg-white p-3 rounded-full shadow-lg transform scale-0 group-hover:scale-100 transition duration-300 hover:bg-gray-200">
-                            <Play fill="black" size={24} className="text-black ml-1" />
-                         </div>
-                         <div className="flex gap-2">
-                           <button onClick={(e) => toggleMyList(movie, e)} className="p-2 rounded-full border-2 border-gray-400 hover:border-white hover:bg-white/20 transition text-white" title="Listeme Ekle">
-                              {isInList(movie.id) ? <Check size={16} /> : <Plus size={16} />}
-                           </button>
-                         </div>
-                      </div>
-                      {movie.vote_average !== undefined && movie.vote_average > 0 && (
-                        <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] font-bold text-green-400 border border-green-500/30">
-                          {movie.vote_average.toFixed(1)}
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-10">
+                  {movies.map((movie) => (
+                    <div key={movie.id} onClick={() => handleMovieClick(movie)} className="group cursor-pointer flex flex-col gap-2 relative">
+                      <div className="relative aspect-[2/3] rounded-lg overflow-hidden bg-gray-800 transition-all duration-300 group-hover:scale-105 group-hover:shadow-2xl group-hover:z-30">
+                        <img src={movie.poster_path ? getImage(movie.poster_path, 'w500') || '' : "https://via.placeholder.com/500x750?text=No+Poster"} alt={movie.title} className="w-full h-full object-cover" loading="lazy" />
+                        
+                        {/* YENİ: Yıl Etiketi (Sol Üst) */}
+                        {getYear(movie) && (
+                            <div className="absolute top-2 left-2 bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-lg z-20">
+                                {getYear(movie)}
+                            </div>
+                        )}
+
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3 backdrop-blur-[2px]">
+                           <div className="bg-white p-3 rounded-full shadow-lg transform scale-0 group-hover:scale-100 transition duration-300 hover:bg-gray-200">
+                              <Play fill="black" size={24} className="text-black ml-1" />
+                           </div>
+                           <div className="flex gap-2">
+                             <button onClick={(e) => toggleMyList(movie, e)} className="p-2 rounded-full border-2 border-gray-400 hover:border-white hover:bg-white/20 transition text-white" title="Listeme Ekle">
+                                {isInList(movie.id) ? <Check size={16} /> : <Plus size={16} />}
+                             </button>
+                           </div>
                         </div>
-                      )}
+                        {movie.vote_average !== undefined && movie.vote_average > 0 && (
+                          <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-md px-1.5 py-0.5 rounded text-[10px] font-bold text-green-400 border border-green-500/30">
+                            {movie.vote_average.toFixed(1)}
+                          </div>
+                        )}
+                      </div>
+                      <div className="px-1 mt-1">
+                         <h3 className="text-sm font-medium text-gray-200 truncate group-hover:text-red-500 transition-colors">{movie.title || movie.name}</h3>
+                      </div>
                     </div>
-                    <div className="px-1 mt-1">
-                       <h3 className="text-sm font-medium text-gray-200 truncate group-hover:text-red-500 transition-colors">{movie.title || movie.name}</h3>
+                  ))}
+                </div>
+
+                {/* YENİ: DAHA FAZLA GÖSTER BUTONU */}
+                {activeCategory !== 'mylist' && activeCategory !== 'history' && (
+                    <div className="w-full flex justify-center py-10">
+                        <button 
+                            onClick={handleLoadMore} 
+                            disabled={loadingMore}
+                            className="bg-gray-800 hover:bg-gray-700 text-white px-8 py-3 rounded-full font-bold transition flex items-center gap-2 disabled:opacity-50"
+                        >
+                            {loadingMore ? <Loader2 className="animate-spin" size={20} /> : <Plus size={20} />}
+                            {loadingMore ? 'Yükleniyor...' : 'Daha Fazla Göster'}
+                        </button>
                     </div>
-                  </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </>
         )}
