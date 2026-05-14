@@ -454,7 +454,7 @@ export default function App() {
     if (!movie) return "";
     const type = movie.media_type === 'tv' || (!movie.media_type && !movie.title) ? 'tv' : 'movie'; 
     const id = movie.id;
-    return `https://vidsrc-embed.ru/embed/movie?tmdb=${type}/${id}`;
+    return `https://vidsrc.to/embed/tv/${type}/${id}`;
   };
 
   const getImage = (path?: string, size = 'original') => path ? `https://image.tmdb.org/t/p/${size}${path}` : null;
