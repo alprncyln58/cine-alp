@@ -750,7 +750,7 @@ export default function App() {
 
             {isPlaying ? (
               <div className="w-full h-full bg-black" >
-                 <iframe src={getVideoSource(selectedMovie)} className="w-full h-full" allowFullScreen sandbox="allow-scripts allow-same-origin allow-presentation" allow="autoplay; encrypted-media" title="Player"></iframe>
+                 <iframe src={getVideoSource(selectedMovie)} className="w-full h-full" allowFullScreen  allow="autoplay; encrypted-media" title="Player"></iframe>
               </div>
             ) : (
               <div className="flex flex-col h-full overflow-y-auto custom-scrollbar">
