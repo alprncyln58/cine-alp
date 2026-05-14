@@ -749,8 +749,8 @@ export default function App() {
             <button onClick={() => setSelectedMovie(null)} className="absolute top-4 right-4 z-50 bg-black/60 text-white p-2 rounded-full hover:bg-red-600 hover:text-white transition backdrop-blur-md group"><X size={24} className="group-hover:rotate-90 transition duration-300" /></button>
 
             {isPlaying ? (
-              <div className="w-full h-full bg-black">
-                 <iframe src={getVideoSource(selectedMovie)} className="w-full h-full" allowFullScreen allow="autoplay; encrypted-media" title="Player"></iframe>
+              <div className="w-full h-full bg-black" >
+                 <iframe src={getVideoSource(selectedMovie)} className="w-full h-full" allowFullScreen sandbox="allow-scripts allow-same-origin allow-presentation" allow="autoplay; encrypted-media" title="Player"></iframe>
               </div>
             ) : (
               <div className="flex flex-col h-full overflow-y-auto custom-scrollbar">
