@@ -23,13 +23,15 @@ import {
 } from "firebase/firestore";
 
 // --- FIREBASE AYARLARI ---
+// --- FIREBASE AYARLARI ---
 const firebaseConfig = {
-  apiKey: "AIzaSyA9pFHmmbGuqzlZtxT3fehN6QF25MaM-fI",
-  authDomain: "fizyoloji-egitim-pro.firebaseapp.com",
-  projectId: "fizyoloji-egitim-pro",
-  storageBucket: "fizyoloji-egitim-pro.firebasestorage.app",
-  messagingSenderId: "481623846869",
-  appId: "1:481623846869:web:8adaa127d04e385861d75c"
+  apiKey: "AIzaSyCVeQ-Rj8Kx-YAJtEZs7bqzLkr2hwQrNlo",
+  authDomain: "gen-lang-client-0259328350.firebaseapp.com",
+  projectId: "gen-lang-client-0259328350",
+  storageBucket: "gen-lang-client-0259328350.firebasestorage.app",
+  messagingSenderId: "632827008516",
+  appId: "1:632827008516:web:a612a17fe4d257df458751",
+  measurementId: "G-ZDYLM2DQCV"
 };
 
 // Firebase Başlatma
